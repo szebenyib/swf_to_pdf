@@ -7,8 +7,65 @@ from pathlib import Path
 from subprocess import call
 # PDF export from PNGs
 from fpdf import FPDF
+# debug
+
+"""
+ Converts multiple swf files to images and then to a pdf.
+ Requires: swfrender (operating system level) - swf to image conversion
+           FPDF - image to pdf conversion
+"""
 
 
+def raw_to_images(image_suffix,
+                  x_size,
+                  y_size,
+                  source_suffix="swf",
+                  verbose=True):
+    """
+    Converts multiple swf files into multiple images
+    :type source_suffix: 'swf', or 'svg'
+          image_suffix: str, e.g. 'png', and supported types by swfrender
+          x_size: size in pixels,
+          y_size: size in pixels,
+          verbose: print execution information
+    """
+    time_function_start = time.time()
+    if verbose:
+        print("\n* Generating images *")
+
+    paths = [path for path in Path.cwd().iterdir()
+             if path.suffix == ("." + source_suffix)]
+    number_of_paths = len(paths)
+    if number_of_paths:
+        counter = 1
+
+        for path in paths:
+            time_iteration_start = time.time()
+            result = call(["swfrender", path.name,
+                           "-X", str(x_size),
+                           "-Y", str(y_size),
+                           "-o", path.name[:-3] + image_suffix])
+            if verbose:
+                time_current = time.time()
+                if result == 0:
+                    msg = ("{:04d}/{:04d}: {}png created. " +
+                          "{:03.1f}s {:6d}m").format(number_of_paths,
+                                                     counter,
+                                                     path.name[:-3],
+                                                     (time_current - time_iteration_start),
+                                                     int((time_current - time_function_start) / 60))
+                else:
+                    msg = ("{:04d}/{:04d}: {}png could not be created. " +
+                          "{:03.1f}s {:6d}m").format(number_of_paths,
+                                                     counter,
+                                                     path.name[:-3],
+                                                     (time_current - time_iteration_start),
+                                                     int((time_current - time_function_start) / 60))
+                counter += 1
+                print(msg)
+    else:
+        if verbose:
+            print("No " + source_suffix + " files were found.")
 """
  Converts multiple swf files to images and then to a pdf.
  Requires: swfrender (operating system level) - swf to image conversion
@@ -55,7 +112,7 @@ def swf_to_images(image_suffix,
                                                      (time_current - time_iteration_start),
                                                      int((time_current - time_function_start) / 60))
                 else:
-                    msg = ("{:04d}/{:04d}: {}png could not be created. " + \
+                    msg = ("{:04d}/{:04d}: {}png could not be created. " +
                           "{:03.1f}s {:6d}m").format(number_of_paths,
                                                      counter,
                                                      path.name[:-3],
@@ -165,7 +222,6 @@ def process_with_args(args,
         y_size = default_y_size
     if args.image_format:
         print("Due to swftools currently only supporting png, image format is reset to png.")
-        #image_suffix = args.image_format
         image_suffix = default_image_suffix
     else:
         image_suffix = default_image_suffix
@@ -220,7 +276,7 @@ if __name__ == "__main__":
                       source_suffix=source_suffix,
                       x_size=default_x_size,
                       y_size=default_y_size)
-        pdf = images_to_pdf(image_suffix=image_suffix,
+        pdf = images_to_pdf(image_suffix=default_image_suffix,
                             x_size=default_x_size,
                             y_size=default_y_size)
         pdf_export_to_disk(pdf=pdf)
