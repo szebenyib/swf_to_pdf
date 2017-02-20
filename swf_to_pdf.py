@@ -2,12 +2,13 @@
 import argparse
 # Time measurement
 import time
+# SVG reading
+import cairosvg
 # SWF reading
 from pathlib import Path
 from subprocess import call
 # PDF export from PNGs
 from fpdf import FPDF
-# debug
 
 """
  Converts multiple swf files to images and then to a pdf.
@@ -41,10 +42,20 @@ def raw_to_images(image_suffix,
 
         for path in paths:
             time_iteration_start = time.time()
-            result = call(["swfrender", path.name,
-                           "-X", str(x_size),
-                           "-Y", str(y_size),
-                           "-o", path.name[:-3] + image_suffix])
+            if source_suffix == "svg":
+                try:
+                    cairosvg.svg2png(url=str(path),
+                                     write_to=str(path)[:-3] + image_suffix,
+                                     parent_height=1682,
+                                     parent_width=1190)
+                    result = 0
+                except Exception:
+                    result = 1
+            elif source_suffix == "swf":
+                result = call(["swfrender", path.name,
+                               "-X", str(x_size),
+                               "-Y", str(y_size),
+                               "-o", path.name[:-3] + image_suffix])
             if verbose:
                 time_current = time.time()
                 if result == 0:
@@ -95,7 +106,6 @@ def swf_to_images(image_suffix,
     number_of_paths = len(paths)
     if number_of_paths:
         counter = 1
-
         for path in paths:
             time_iteration_start = time.time()
             result = call(["swfrender", path.name,
@@ -249,8 +259,8 @@ def process_with_args(args,
         else:
             pass
     else:
-        swf_to_images(image_suffix=image_suffix,
-                      source_suffix=source_suffix,
+        raw_to_images(image_suffix=image_suffix,
+                      source_suffix="svg",
                       x_size=x_size,
                       y_size=y_size)
         pdf = images_to_pdf(image_suffix=image_suffix,
