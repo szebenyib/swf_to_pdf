@@ -2,6 +2,8 @@
 import argparse
 # Time measurement
 import time
+# Path sorting
+from functools import cmp_to_key
 # SVG reading
 import cairosvg
 from PIL import Image
@@ -21,8 +23,8 @@ def convert_transparency_to_color(png_bytes_file,
     Source: http://stackoverflow.com/questions/9166400/convert-rgba-png-to-rgb-with-pil
     Source: http://stackoverflow.com/a/9459208/284318
 
-    :type image -- PIL RGBA Image object
-          color -- Tuple r, g, b (default 255, 255, 255 = white)
+    :type png_bytes_file -- PIL RGBA Image object
+          background_color -- Tuple r, g, b (default 255, 255, 255 = white)
     """
     png_file = Image.open(BytesIO(png_bytes_file))
     png_file.load()  # needed for split()
@@ -32,6 +34,27 @@ def convert_transparency_to_color(png_bytes_file,
     image_without_alpha.paste(png_file,
                               mask=png_file.split()[3])  # 3 is the alpha channel
     return image_without_alpha
+
+
+def path_sorter(a, b):
+    """
+    Sorting paths to fix default sort order. This function
+    first respects the length and then the values to fix the order.
+    :return: -1 is a < b, 0 if a == b, 1 if a > b
+    :type: a PosixPath
+           b PosixPath
+    """
+    if len(a.stem) < len(b.stem):
+        return -1
+    elif len(a.stem) > len(b.stem):
+        return 1
+    elif len(a.stem) == len(b.stem):
+        if a.stem < b.stem:
+            return -1
+        elif a.stem > b.stem:
+            return 1
+        else:
+            return 0
 
 
 def raw_to_images(image_suffix,
@@ -54,6 +77,7 @@ def raw_to_images(image_suffix,
 
     paths = [path for path in Path.cwd().iterdir()
              if path.suffix == ("." + source_suffix)]
+    paths.sort(key=cmp_to_key(path_sorter))
     number_of_paths = len(paths)
     if number_of_paths:
         counter = 1
@@ -64,8 +88,8 @@ def raw_to_images(image_suffix,
             if source_suffix == "svg":
                 try:
                     png_file = cairosvg.svg2png(url=str(path),
-                                                parent_height=y_size, #1682
-                                                parent_width=x_size)  #1190
+                                                parent_height=y_size,  # 1682
+                                                parent_width=x_size)   # 1190
                     png_file = convert_transparency_to_color(png_bytes_file=png_file,
                                                              background_color=background_color)
                     filename = str(path)[:-3] + image_suffix
@@ -73,6 +97,7 @@ def raw_to_images(image_suffix,
 
                     result = 0
                 except Exception as e:
+                    print(str(e))
                     result = 1
             elif source_suffix == "swf":
                 result = call(["swfrender", path.name,
@@ -122,6 +147,7 @@ def images_to_pdf(image_suffix: str,
 
     imagepaths = [path for path in Path.cwd().iterdir()
                   if path.suffix == ("." + image_suffix)]
+    imagepaths.sort(key=cmp_to_key(path_sorter))
     number_of_paths = len(imagepaths)
     if number_of_paths:
         counter = 1
@@ -218,8 +244,12 @@ def process_with_args(args,
         else:
             print("Only swf or svg is supported, trying {} as default.".format(default_source_suffix))
             source_suffix = default_source_suffix
+    else:
+        source_suffix = default_source_suffix
     if args.background_color:
         background_color = tuple(args.background_color.split("."))
+    else:
+        background_color = default_background_color
 
     if args.mode:
         if args.mode == 1:
