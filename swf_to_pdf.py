@@ -4,23 +4,41 @@ import argparse
 import time
 # SVG reading
 import cairosvg
+from PIL import Image
+from io import BytesIO
 # SWF reading
 from pathlib import Path
 from subprocess import call
 # PDF export from PNGs
 from fpdf import FPDF
 
-"""
- Converts multiple swf files to images and then to a pdf.
- Requires: swfrender (operating system level) - swf to image conversion
-           FPDF - image to pdf conversion
-"""
+
+def convert_transparency_to_color(png_bytes_file,
+                                  background_color):
+    """
+    Removing transparency from PNG files for a faster pdf conversion
+
+    Source: http://stackoverflow.com/questions/9166400/convert-rgba-png-to-rgb-with-pil
+    Source: http://stackoverflow.com/a/9459208/284318
+
+    :type image -- PIL RGBA Image object
+          color -- Tuple r, g, b (default 255, 255, 255 = white)
+    """
+    png_file = Image.open(BytesIO(png_bytes_file))
+    png_file.load()  # needed for split()
+    image_without_alpha = Image.new('RGB',
+                                    png_file.size,
+                                    background_color)
+    image_without_alpha.paste(png_file,
+                              mask=png_file.split()[3])  # 3 is the alpha channel
+    return image_without_alpha
 
 
 def raw_to_images(image_suffix,
                   x_size,
                   y_size,
-                  source_suffix="swf",
+                  source_suffix,
+                  background_color,
                   verbose=True):
     """
     Converts multiple swf files into multiple images
@@ -42,14 +60,19 @@ def raw_to_images(image_suffix,
 
         for path in paths:
             time_iteration_start = time.time()
+            result = 0
             if source_suffix == "svg":
                 try:
-                    cairosvg.svg2png(url=str(path),
-                                     write_to=str(path)[:-3] + image_suffix,
-                                     parent_height=1682,
-                                     parent_width=1190)
+                    png_file = cairosvg.svg2png(url=str(path),
+                                                parent_height=y_size, #1682
+                                                parent_width=x_size)  #1190
+                    png_file = convert_transparency_to_color(png_bytes_file=png_file,
+                                                             background_color=background_color)
+                    filename = str(path)[:-3] + image_suffix
+                    png_file.save(fp=filename)
+
                     result = 0
-                except Exception:
+                except Exception as e:
                     result = 1
             elif source_suffix == "swf":
                 result = call(["swfrender", path.name,
@@ -59,73 +82,19 @@ def raw_to_images(image_suffix,
             if verbose:
                 time_current = time.time()
                 if result == 0:
-                    msg = ("{:04d}/{:04d}: {}png created. " +
+                    msg = ("{:04d}/{:04d}: {}{} created. " +
                           "{:03.1f}s {:6d}m").format(number_of_paths,
                                                      counter,
                                                      path.name[:-3],
+                                                     image_suffix,
                                                      (time_current - time_iteration_start),
                                                      int((time_current - time_function_start) / 60))
                 else:
-                    msg = ("{:04d}/{:04d}: {}png could not be created. " +
+                    msg = ("{:04d}/{:04d}: {}{} could not be created. " +
                           "{:03.1f}s {:6d}m").format(number_of_paths,
                                                      counter,
                                                      path.name[:-3],
-                                                     (time_current - time_iteration_start),
-                                                     int((time_current - time_function_start) / 60))
-                counter += 1
-                print(msg)
-    else:
-        if verbose:
-            print("No " + source_suffix + " files were found.")
-"""
- Converts multiple swf files to images and then to a pdf.
- Requires: swfrender (operating system level) - swf to image conversion
-           FPDF - image to pdf conversion
-"""
-
-
-def swf_to_images(image_suffix,
-                  x_size,
-                  y_size,
-                  source_suffix="swf",
-                  verbose=True):
-    """
-    Converts multiple swf files into multiple images
-    :type source_suffix: 'swf',
-          image_suffix: str, e.g. 'png', and supported types by swfrender
-          x_size: size in pixels,
-          y_size: size in pixels,
-          verbose: print execution information
-    """
-    time_function_start = time.time()
-    if verbose:
-        print("\n* Generating images *")
-
-    paths = [path for path in Path.cwd().iterdir()
-             if path.suffix == ("." + source_suffix)]
-    number_of_paths = len(paths)
-    if number_of_paths:
-        counter = 1
-        for path in paths:
-            time_iteration_start = time.time()
-            result = call(["swfrender", path.name,
-                           "-X", str(x_size),
-                           "-Y", str(y_size),
-                           "-o", path.name[:-3] + image_suffix])
-            if verbose:
-                time_current = time.time()
-                if result == 0:
-                    msg = ("{:04d}/{:04d}: {}png created. " +
-                          "{:03.1f}s {:6d}m").format(number_of_paths,
-                                                     counter,
-                                                     path.name[:-3],
-                                                     (time_current - time_iteration_start),
-                                                     int((time_current - time_function_start) / 60))
-                else:
-                    msg = ("{:04d}/{:04d}: {}png could not be created. " +
-                          "{:03.1f}s {:6d}m").format(number_of_paths,
-                                                     counter,
-                                                     path.name[:-3],
+                                                     image_suffix,
                                                      (time_current - time_iteration_start),
                                                      int((time_current - time_function_start) / 60))
                 counter += 1
@@ -196,7 +165,8 @@ def parse_args():
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode",
-                        help="1 - Images generation, 2 - PDF from existing images, 3 - Images and PDF",
+                        help="1 - Generate images only, 2 - Generate PDF from existing images,"
+                             "3 - Generate images and PDF",
                         type=int)
     parser.add_argument("--x_size",
                         help="X size of images and pdf in pixels",
@@ -206,6 +176,10 @@ def parse_args():
                         type=int)
     parser.add_argument("--image_format",
                         help="png|jpeg")
+    parser.add_argument("--source_format",
+                        help="swf|svg")
+    parser.add_argument("--background_color",
+                        help="255.255.255")
     args = parser.parse_args()
     return args
 
@@ -213,13 +187,16 @@ def parse_args():
 def process_with_args(args,
                       default_x_size,
                       default_y_size,
-                      default_image_suffix):
+                      default_source_suffix,
+                      default_image_suffix,
+                      default_background_color):
     """
     Calls the processing functions with the parsed and default arguments, if parsed
     arguments are missing.
     :type args: arguments parsed by ArgumentParser
           default_x_size: default size to use if none is parsed
           default_y_size: default size to use if none is parsed
+          default_source_suffix: default suffix to use if none is parsed
           default_image_suffix: default suffix to use if none is parsed
     """
     if args.x_size:
@@ -235,23 +212,33 @@ def process_with_args(args,
         image_suffix = default_image_suffix
     else:
         image_suffix = default_image_suffix
+    if args.source_format:
+        if args.source_format in ("swf", "svg"):
+            source_suffix = args.source_format
+        else:
+            print("Only swf or svg is supported, trying {} as default.".format(default_source_suffix))
+            source_suffix = default_source_suffix
+    if args.background_color:
+        background_color = tuple(args.background_color.split("."))
 
     if args.mode:
         if args.mode == 1:
-            swf_to_images(image_suffix=image_suffix,
+            raw_to_images(image_suffix=image_suffix,
                           source_suffix=source_suffix,
                           x_size=x_size,
-                          y_size=y_size)
+                          y_size=y_size,
+                          background_color=background_color)
         elif args.mode == 2:
             pdf = images_to_pdf(image_suffix=image_suffix,
                                 x_size=x_size,
                                 y_size=y_size)
             pdf_export_to_disk(pdf=pdf)
         elif args.mode == 3:
-            swf_to_images(image_suffix=image_suffix,
+            raw_to_images(image_suffix=image_suffix,
                           source_suffix=source_suffix,
                           x_size=x_size,
-                          y_size=y_size)
+                          y_size=y_size,
+                          background_color=background_color)
             pdf = images_to_pdf(image_suffix=image_suffix,
                                 x_size=x_size,
                                 y_size=y_size)
@@ -259,10 +246,11 @@ def process_with_args(args,
         else:
             pass
     else:
-        raw_to_images(image_suffix=image_suffix,
-                      source_suffix="svg",
+        raw_to_images(image_suffix=default_image_suffix,
+                      source_suffix=default_source_suffix,
                       x_size=x_size,
-                      y_size=y_size)
+                      y_size=y_size,
+                      background_color=default_background_color)
         pdf = images_to_pdf(image_suffix=image_suffix,
                             x_size=x_size,
                             y_size=y_size)
@@ -270,22 +258,26 @@ def process_with_args(args,
 
 
 if __name__ == "__main__":
-    source_suffix = "swf"
+    default_source_suffix = "svg"
     default_image_suffix = "png"
     default_x_size = 2480
     default_y_size = 3508
+    default_background_color = (255, 255, 255)
 
     args = parse_args()
     if args:
         process_with_args(args,
                           default_x_size=default_x_size,
                           default_y_size=default_y_size,
-                          default_image_suffix=default_image_suffix)
+                          default_image_suffix=default_image_suffix,
+                          default_source_suffix=default_source_suffix,
+                          default_background_color=default_background_color)
     else:
-        swf_to_images(image_suffix=default_image_suffix,
-                      source_suffix=source_suffix,
+        raw_to_images(image_suffix=default_image_suffix,
+                      source_suffix=default_source_suffix,
                       x_size=default_x_size,
-                      y_size=default_y_size)
+                      y_size=default_y_size,
+                      background_color=default_background_color)
         pdf = images_to_pdf(image_suffix=default_image_suffix,
                             x_size=default_x_size,
                             y_size=default_y_size)
