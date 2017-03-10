@@ -276,11 +276,11 @@ def process_with_args(args,
         else:
             pass
     else:
-        raw_to_images(image_suffix=default_image_suffix,
-                      source_suffix=default_source_suffix,
+        raw_to_images(image_suffix=image_suffix,
+                      source_suffix=source_suffix,
                       x_size=x_size,
                       y_size=y_size,
-                      background_color=default_background_color)
+                      background_color=background_color)
         pdf = images_to_pdf(image_suffix=image_suffix,
                             x_size=x_size,
                             y_size=y_size)
