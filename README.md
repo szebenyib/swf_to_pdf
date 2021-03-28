@@ -1,6 +1,6 @@
 # swf_to_pdf
-Converts swf to pdf
-Also converting svg to pdf
+
+Converts swf to png while also merging png files into a single pdf.
 
 # Installation
 `pip3 -r requirements.txt`
@@ -12,7 +12,7 @@ Copy the .py file to the folder with svg files, then:
 `python3 swf_to_pdf.py`
 
 * ask for help
-`python3 swf_to_pdf.py --help``
+`python3 swf_to_pdf.py --help`
 
 * add some parameters
 `python3 swf_to_pdf.py --x_size 1536 --y_size 2048`
