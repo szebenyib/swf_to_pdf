@@ -36,6 +36,23 @@ def convert_transparency_to_color(png_bytes_file,
     return image_without_alpha
 
 
+def crop_image(pil_image, x_size, y_size, crop_coords):
+    """
+    Cropping pixels from edges of the images
+
+    :type png_bytes_file -- PIL RGBA image object
+          x_size -- X size of the desired output
+          y_size -- Y size of the desired output
+          crop_coords -- Dict of ints with top-left-bottom-right
+    """
+    cropped_image = pil_image.crop((crop_coords["left"],
+                                    crop_coords["top"],
+                                    crop_coords["right"],
+                                    crop_coords["bottom"]))
+    resized_cropped_image = cropped_image.resize((x_size, y_size))
+    return resized_cropped_image
+
+
 def path_sorter(a, b):
     """
     Sorting paths to fix default sort order. This function
@@ -60,6 +77,7 @@ def path_sorter(a, b):
 def raw_to_images(image_suffix,
                   x_size,
                   y_size,
+                  crop_coords,
                   source_suffix,
                   background_color,
                   verbose=True):
@@ -90,10 +108,15 @@ def raw_to_images(image_suffix,
                     png_file = cairosvg.svg2png(url=str(path),
                                                 parent_height=y_size,  # 1682
                                                 parent_width=x_size)   # 1190
-                    png_file = convert_transparency_to_color(png_bytes_file=png_file,
-                                                             background_color=background_color)
+                    pil_image = convert_transparency_to_color(png_bytes_file=png_file,
+                                                              background_color=background_color)
+                    if crop_coords:
+                        pil_image = crop_image(pil_image,
+                                               x_size,
+                                               y_size,
+                                               crop_coords)
                     filename = str(path)[:-3] + image_suffix
-                    png_file.save(fp=filename)
+                    pil_image.save(fp=filename)
 
                     result = 0
                 except Exception as e:
@@ -200,6 +223,22 @@ def parse_args():
     parser.add_argument("--y_size",
                         help="Y size of images and pdf in pixels",
                         type=int)
+    parser.add_argument("--crop_top",
+                        help="Top-left coordinates for crop, you must set"
+                        + " all 4 if any is set",
+                        type=int)
+    parser.add_argument("--crop_left",
+                        help="Top-left coordinates for crop, you must set"
+                        + " all 4 if any is set",
+                        type=int)
+    parser.add_argument("--crop_bottom",
+                        help="Bottom-right coordinates for crop, you must set"
+                        + " all 4 if any is set",
+                        type=int)
+    parser.add_argument("--crop_right",
+                        help="Bottom-right coordinates for crop, you must set"
+                        + "all 4 if any is set",
+                        type=int)
     parser.add_argument("--image_format",
                         help="png|jpeg")
     parser.add_argument("--source_format",
@@ -233,6 +272,17 @@ def process_with_args(args,
         y_size = args.y_size
     else:
         y_size = default_y_size
+    crop_coords = dict()
+    if args.crop_top or args.crop_left or args.crop_bottom or args.crop_right:
+        crop_coords = dict()
+        if args.crop_top:
+            crop_coords["top"] = args.crop_top
+        if args.crop_left:
+            crop_coords["left"] = args.crop_left
+        if args.crop_bottom:
+            crop_coords["bottom"] = args.crop_bottom
+        if args.crop_right:
+            crop_coords["right"] = args.crop_right
     if args.image_format:
         print("Due to swftools currently only supporting png, image format is reset to png.")
         image_suffix = default_image_suffix
@@ -257,6 +307,7 @@ def process_with_args(args,
                           source_suffix=source_suffix,
                           x_size=x_size,
                           y_size=y_size,
+                          crop_coords=crop_coords,
                           background_color=background_color)
         elif args.mode == 2:
             pdf = images_to_pdf(image_suffix=image_suffix,
@@ -268,6 +319,7 @@ def process_with_args(args,
                           source_suffix=source_suffix,
                           x_size=x_size,
                           y_size=y_size,
+                          crop_coords=crop_coords,
                           background_color=background_color)
             pdf = images_to_pdf(image_suffix=image_suffix,
                                 x_size=x_size,
@@ -280,6 +332,7 @@ def process_with_args(args,
                       source_suffix=source_suffix,
                       x_size=x_size,
                       y_size=y_size,
+                      crop_coords=crop_coords,
                       background_color=background_color)
         pdf = images_to_pdf(image_suffix=image_suffix,
                             x_size=x_size,
@@ -293,6 +346,7 @@ if __name__ == "__main__":
     default_x_size = 2480
     default_y_size = 3508
     default_background_color = (255, 255, 255)
+    default_crop_coords = None
 
     args = parse_args()
     if args:
